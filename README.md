@@ -9,6 +9,13 @@ All slurs and offensive terms have been either obfuscated (e.g., "n 1 g g 4") or
 
 If you encounter content that you believe could be handled more responsibly or should be removed, please open an issue or contact the maintainer directly.
 
+# What
+This is a simple github repo where various naive string strategies are matched against a text file via the usage of a `radix trie` and `leetspeak de-obfuscator`. This is something I imagine to be used in conjunction with an LLM-based kind of moderation and the strat should look like this:
+
+```
+cache (terminate if hit) -> leetspeak de-obfuscation -> trie matchup of split words and various ngram sizes and combinations (up to the set max n-gram size) (terminate if match) -> LLM (worse case scenario) -> response
+```
+
 ## Context
 I was making a simple word validator and was also procrastinating and I realized that on a game server I was on, it had relatively poor moderation. Somehow it became this and I got some feedback from friends
 
