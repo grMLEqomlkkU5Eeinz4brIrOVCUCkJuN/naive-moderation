@@ -1,6 +1,3 @@
-[![CI/CD Pipeline](https://github.com/yourusername/naive-moderation/actions/workflows/ci.yml/badge.svg)](https://github.com/yourusername/naive-moderation/actions/workflows/ci.yml)
-[![Quick Tests](https://github.com/yourusername/naive-moderation/actions/workflows/pr-tests.yml/badge.svg)](https://github.com/yourusername/naive-moderation/actions/workflows/pr-tests.yml)
-
 # WARNING
 
 This repository may contain examples of offensive or inappropriate language (including slurs and profanities) strictly for the purposes of testing content moderation systems, toxicity classifiers, or other machine learning models intended to detect and mitigate harmful language.
