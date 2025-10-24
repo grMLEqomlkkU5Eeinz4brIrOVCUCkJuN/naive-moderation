@@ -13,8 +13,10 @@ If you encounter content that you believe could be handled more responsibly or s
 This is a simple github repo where various naive string strategies are matched against a text file via the usage of a `radix trie` and `leetspeak de-obfuscator`. This is something I imagine to be used in conjunction with an LLM-based kind of moderation and the strat should look like this:
 
 ```
-cache (terminate if hit) -> leetspeak de-obfuscation -> trie matchup of split words and various ngram sizes and combinations (up to the set max n-gram size) (terminate if match) -> LLM (worse case scenario) -> response
+cache (terminate if hit) -> spaced-out character reconstruction -> leetspeak de-obfuscation -> trie matchup of split words and various ngram sizes and combinations (up to the set max n-gram size) (terminate if match) -> LLM (worse case scenario) -> response
 ```
+
+Be sure to give [seshat-trie](https://www.npmjs.com/package/seshat-trie) a look.
 
 ## Context
 I was making a simple word validator and was also procrastinating and I realized that on a game server I was on, it had relatively poor moderation. Somehow it became this and I got some feedback from friends
@@ -48,6 +50,10 @@ Notes:
 
 ## Moderation strategy and best practices
 
+- **Spaced-out character detection**:
+  - The system automatically detects and reconstructs words where individual characters are separated by spaces (e.g., `s l u r` → `slur`, `d a m n` → `damn`).
+  - This handles common obfuscation attempts where users try to bypass filters by spacing out letters.
+  - Mixed content is supported: `hello w o r l d` becomes `hello world`.
 - Numbers in phrases should be spelled out in `slurs.txt`:
   - Example: "2 girls 1 cup" often appears with digits. Tokenization plus n-grams means partial matches like "2girls1" may be picked up, while "two girls one cup" may not match unless present in the list. To be robust, include the phrase with words: "two girls one cup".
 - Small-length leetspeak is handled automatically:
@@ -57,7 +63,7 @@ Notes:
 - Multi-word phrases and n-grams:
   - Up to `MAX_NGRAM_SIZE` tokens are matched together (default 3). If you need detection across two or three words (e.g., "son of", "piece of crap"), include them as multi-word entries in `slurs.txt`. For longer phrases, increase `MAX_NGRAM_SIZE` judiciously or rely on key multi-word chunks.
 - Avoid overlisting noisy variants:
-  - Prefer the normalized, canonical forms. The checker covers case-insensitivity, simple spacing obfuscation, and limited unleet mapping.
+  - Prefer the normalized, canonical forms. The checker covers case-insensitivity, simple spacing obfuscation, spaced-out character reconstruction, and limited unleet mapping.
 - Review false positives/negatives regularly:
   - If a harmful phrase is slipping through, add the canonical version to `slurs.txt`. If benign content is flagged, consider removing or refining overly broad entries.
 

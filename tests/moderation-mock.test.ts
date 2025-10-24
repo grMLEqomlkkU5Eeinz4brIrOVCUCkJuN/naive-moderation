@@ -27,9 +27,73 @@ describe("Moderation Model Interface", () => {
 		}
 
 		async isStringVulgar(sentence: string): Promise<boolean | Error> {
-			// Simple mock logic for testing
+			// Simple mock logic for testing with spaced-out character detection
 			const vulgarWords = ["bad", "word", "test", "damn", "hell"];
-			return vulgarWords.some(word => sentence.toLowerCase().includes(word));
+			
+			// Check original sentence
+			if (vulgarWords.some(word => sentence.toLowerCase().includes(word))) {
+				return true;
+			}
+			
+			// Check spaced-out character reconstruction
+			const spacedReconstructed = this.reconstructSpacedWords(sentence);
+			for (const variant of spacedReconstructed) {
+				if (vulgarWords.some(word => variant.toLowerCase().includes(word))) {
+					return true;
+				}
+			}
+			
+			return false;
+		}
+
+		// Mock implementation of spaced-out character reconstruction
+		private reconstructSpacedWords(text: string): string[] {
+			const variants = new Set<string>();
+			
+			// Split by spaces and process each token
+			const tokens = text.split(/\s+/).filter(Boolean);
+			const reconstructedTokens: string[] = [];
+			let hasSpacedWords = false;
+
+			for (let i = 0; i < tokens.length; i++) {
+				const token = tokens[i];
+				
+				// Check if this token is a single character and if we can form a word with subsequent single characters
+				if (token.length === 1 && /[a-zA-Z]/.test(token)) {
+					let spacedWord = token;
+					let j = i + 1;
+					
+					// Look ahead for consecutive single characters
+					while (j < tokens.length && tokens[j].length === 1 && /[a-zA-Z]/.test(tokens[j])) {
+						spacedWord += tokens[j];
+						j++;
+					}
+					
+					// If we found a spaced word (2+ characters), add it as a variant
+					if (spacedWord.length >= 2) {
+						hasSpacedWords = true;
+						reconstructedTokens.push(spacedWord);
+						i = j - 1; // Skip the processed tokens
+					} else {
+						reconstructedTokens.push(token);
+					}
+				} else {
+					reconstructedTokens.push(token);
+				}
+			}
+
+			// If we found spaced words, create variants
+			if (hasSpacedWords) {
+				variants.add(reconstructedTokens.join(" "));
+				
+				// Also try without spaces between the reconstructed words
+				const noSpaces = reconstructedTokens.join("");
+				if (noSpaces !== reconstructedTokens.join(" ")) {
+					variants.add(noSpaces);
+				}
+			}
+
+			return Array.from(variants);
 		}
 
 		async isStringCached(sentence: string): Promise<boolean | Error> {
@@ -122,7 +186,7 @@ describe("Moderation Model Interface", () => {
 
 	describe("Vulgarity Detection Methods", () => {
 		beforeEach(async () => {
-			await mockModeration.initFromArray(["bad", "word"]);
+			await mockModeration.initFromArray(["bad", "word", "damn", "hell"]);
 		});
 
 		describe("isStringVulgar", () => {
@@ -149,6 +213,68 @@ describe("Moderation Model Interface", () => {
 			it("should handle words with spaces", async () => {
 				const result = await mockModeration.isStringVulgar("this is bad text");
 				expect(result).toBe(true);
+			});
+		});
+
+		describe("Spaced-out Character Detection", () => {
+			it("should detect spaced-out vulgar words", async () => {
+				const result = await mockModeration.isStringVulgar("d a m n");
+				expect(result).toBe(true);
+			});
+
+			it("should detect spaced-out vulgar words with mixed case", async () => {
+				const result = await mockModeration.isStringVulgar("H E L L");
+				expect(result).toBe(true);
+			});
+
+			it("should handle mixed content with spaced-out words", async () => {
+				const result = await mockModeration.isStringVulgar("hello w o r l d");
+				expect(result).toBe(true); // "word" is in the vulgar list
+			});
+
+			it("should handle mixed content with spaced-out vulgar words", async () => {
+				const result = await mockModeration.isStringVulgar("hello b a d world");
+				expect(result).toBe(true); // "bad" is in the vulgar list
+			});
+
+			it("should not detect single characters as vulgar", async () => {
+				const result = await mockModeration.isStringVulgar("a b c d");
+				expect(result).toBe(false);
+			});
+
+			it("should handle multiple spaced-out words", async () => {
+				const result = await mockModeration.isStringVulgar("d a m n h e l l");
+				expect(result).toBe(true); // Both "damn" and "hell" are vulgar
+			});
+
+			it("should handle spaced-out words with numbers", async () => {
+				const result = await mockModeration.isStringVulgar("d a m n 1 2 3");
+				expect(result).toBe(true); // "damn" is vulgar
+			});
+
+			it("should handle spaced-out words with punctuation", async () => {
+				const result = await mockModeration.isStringVulgar("d a m n ! ?");
+				expect(result).toBe(true); // "damn" is vulgar
+			});
+
+			it("should handle complex mixed content", async () => {
+				const result = await mockModeration.isStringVulgar("this is a t e s t message");
+				expect(result).toBe(true); // "test" is in the vulgar list
+			});
+
+			it("should handle very long spaced-out words", async () => {
+				const result = await mockModeration.isStringVulgar("w o r d w o r d w o r d");
+				expect(result).toBe(true); // Contains "word" multiple times
+			});
+
+			it("should handle edge case with single character followed by normal word", async () => {
+				const result = await mockModeration.isStringVulgar("a bad");
+				expect(result).toBe(true); // "bad" is vulgar
+			});
+
+			it("should handle edge case with normal word followed by single character", async () => {
+				const result = await mockModeration.isStringVulgar("bad a");
+				expect(result).toBe(true); // "bad" is vulgar
 			});
 		});
 
@@ -245,6 +371,28 @@ describe("Moderation Model Interface", () => {
 			expect(results[0]).toBe(true);  // contains 'bad'
 			expect(results[1]).toBe(false); // clean
 			expect(results[2]).toBe(true);  // contains 'word'
+		});
+
+		it("should handle batch operations with spaced-out characters", async () => {
+			await mockModeration.initFromArray(["damn", "hell", "bad"]);
+      
+			const testMessages = [
+				"d a m n",
+				"h e l l",
+				"b a d",
+				"clean message",
+				"hello w o r l d"
+			];
+      
+			const results = await Promise.all(
+				testMessages.map(msg => mockModeration.isStringVulgar(msg))
+			);
+      
+			expect(results[0]).toBe(true);  // "damn"
+			expect(results[1]).toBe(true);  // "hell"
+			expect(results[2]).toBe(true);  // "bad"
+			expect(results[3]).toBe(false); // clean
+			expect(results[4]).toBe(true); // "word" is in vulgar list
 		});
 
 		it("should maintain state consistency across operations", async () => {

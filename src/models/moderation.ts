@@ -66,16 +66,19 @@ class SeshatModel {
 	async initFromFile(bufferSizeBytes: number): Promise<void> {
 		this.initStarted = true;
 		try {
-			const raw = fs.readFileSync("./slurs.txt", "utf8");
-			const words = raw
-				.split(/\r?\n/)
-				.map((w) => w.trim())
-				.filter((w) => w.length > 0);
-			const count = this.seshat.insertBatch(words);
-			this.initCompleted = true;
-			this.latestRunFailed = false;
-			console.log(`Inserted ${count} words from file.`);
-			return;
+			// Use insertFromFileAsync with callback pattern
+			await new Promise<void>((resolve, reject) => {
+				this.seshat.insertFromFileAsync("./slurs.txt", bufferSizeBytes, (err: Error | null, count?: number) => {
+					if (err) {
+						reject(err);
+					} else {
+						this.initCompleted = true;
+						this.latestRunFailed = false;
+						console.log(`Inserted ${count || 0} words from file using insertFromFileAsync.`);
+						resolve();
+					}
+				});
+			});
 		} catch (error) {
 			this.initCompleted = false;
 			this.initStarted = false;
@@ -107,6 +110,60 @@ class SeshatModel {
 	}
 
 	/**
+	 * Detects and reconstructs spaced-out words from arrays of single characters
+	 * ["s", "l", "u", "r"] -> "slur"
+	 * "hello" ["w", "o", "r", "l", "d"] -> "hello world"
+	 */
+	private reconstructSpacedWords(text: string): string[] {
+		const variants = new Set<string>();
+		
+		// Split by spaces and process each token
+		const tokens = text.split(/\s+/).filter(Boolean);
+		const reconstructedTokens: string[] = [];
+		let hasSpacedWords = false;
+
+		for (let i = 0; i < tokens.length; i++) {
+			const token = tokens[i];
+			
+			// Check if this token is a single character and if we can form a word with subsequent single characters
+			if (token.length === 1 && /[a-zA-Z]/.test(token)) {
+				let spacedWord = token;
+				let j = i + 1;
+				
+				// Look ahead for consecutive single characters
+				while (j < tokens.length && tokens[j].length === 1 && /[a-zA-Z]/.test(tokens[j])) {
+					spacedWord += tokens[j];
+					j++;
+				}
+				
+				// If we found a spaced word (2+ characters), add it as a variant
+				if (spacedWord.length >= 2) {
+					hasSpacedWords = true;
+					reconstructedTokens.push(spacedWord);
+					i = j - 1; // Skip the processed tokens
+				} else {
+					reconstructedTokens.push(token);
+				}
+			} else {
+				reconstructedTokens.push(token);
+			}
+		}
+
+		// If we found spaced words, create variants
+		if (hasSpacedWords) {
+			variants.add(reconstructedTokens.join(" "));
+			
+			// Also try without spaces between the reconstructed words
+			const noSpaces = reconstructedTokens.join("");
+			if (noSpaces !== reconstructedTokens.join(" ")) {
+				variants.add(noSpaces);
+			}
+		}
+
+		return Array.from(variants);
+	}
+
+	/**
 	 * Generate text variants for checking
 	 * Returns array of strings to check, avoiding duplicates
 	 */
@@ -117,11 +174,15 @@ class SeshatModel {
 		const normalized = this.normalizeString(text);
 		variants.add(normalized);
 		
-		// Deobfuscated version
+		// Deobfuscated version (existing functionality)
 		const deobfuscated = this.deobfuscateSpacing(normalized);
 		if (deobfuscated !== normalized) {
 			variants.add(deobfuscated);
 		}
+
+		// Spaced-out word reconstruction (new functionality)
+		const spacedVariants = this.reconstructSpacedWords(normalized);
+		spacedVariants.forEach(variant => variants.add(variant));
 
 		return Array.from(variants);
 	}
@@ -294,6 +355,11 @@ class SeshatModel {
 	}
 
 	async isStringVulgar(sentence: string): Promise<boolean | Error> {
+		// Check if initialization is complete before processing
+		if (!this.isInitCompleted()) {
+			return new Error("Moderation system is not ready. Initialization not completed.");
+		}
+
 		const cacheResult = await this.isStringCached(sentence);
 		if (cacheResult instanceof Error) {
 			return cacheResult;
@@ -308,6 +374,11 @@ class SeshatModel {
 	}
 
 	async isStringInTrie(sentence: string): Promise<boolean | Error> {
+		// Check if initialization is complete before processing
+		if (!this.isInitCompleted()) {
+			return new Error("Moderation system is not ready. Initialization not completed.");
+		}
+
 		try {
 			const isVulgar = await this.checkAllVariants(sentence);
 			await this.cache.set(sentence, isVulgar.toString());
