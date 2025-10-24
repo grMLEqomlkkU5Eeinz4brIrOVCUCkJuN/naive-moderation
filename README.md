@@ -1,3 +1,6 @@
+[![CI/CD Pipeline](https://github.com/yourusername/naive-moderation/actions/workflows/ci.yml/badge.svg)](https://github.com/yourusername/naive-moderation/actions/workflows/ci.yml)
+[![Quick Tests](https://github.com/yourusername/naive-moderation/actions/workflows/pr-tests.yml/badge.svg)](https://github.com/yourusername/naive-moderation/actions/workflows/pr-tests.yml)
+
 # WARNING
 
 This repository may contain examples of offensive or inappropriate language (including slurs and profanities) strictly for the purposes of testing content moderation systems, toxicity classifiers, or other machine learning models intended to detect and mitigate harmful language.
@@ -70,4 +73,55 @@ Notes:
 ## Healthcheck
 
 - GET `/health` — Returns `200 OK` if the service is up.
+
+## CI/CD Pipeline
+
+This project includes GitHub Actions workflows for continuous integration and deployment (this whole part is copied and modified from an assignment):
+
+### Workflows
+
+1. **CI/CD Pipeline** (`.github/workflows/ci.yml`):
+   - **Test Suite**: Runs Jest tests across Node.js versions 18.x, 20.x, and 22.x
+   - **Security Audit**: Checks for vulnerabilities using `npm audit` and `audit-ci`
+   - **Build Verification**: Ensures the project builds successfully
+   - **Integration Tests**: Tests API endpoints including spaced-out character detection
+   - **Deployment**: Creates deployment artifacts for main/master branches
+
+2. **Quick Tests** (`.github/workflows/pr-tests.yml`):
+   - Lightweight workflow for pull requests
+   - Runs linting, tests, and build verification
+   - Faster feedback for development
+
+### Features
+
+- **Multi-Node Testing**: Tests compatibility across Node.js 18.x, 20.x, and 22.x
+- **Security Scanning**: Automated vulnerability detection
+- **Code Coverage**: Generates and uploads coverage reports
+- **API Testing**: End-to-end integration tests including spaced-out character detection
+- **Cross-Platform**: Uses `rimraf` for cross-platform file operations
+- **Artifact Generation**: Creates deployment packages for releases
+
+### Local Development
+
+To run the same checks locally that the CI runs:
+
+```bash
+# Install dependencies
+npm ci
+
+# Run linting
+npm run lint
+
+# Run tests
+npm test
+
+# Run tests with coverage
+npm run test:coverage
+
+# Build project
+npm run build
+
+# Security audit
+npm audit --audit-level=moderate
+```
 

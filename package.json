@@ -12,8 +12,9 @@
     "test:coverage": "jest --coverage",
     "lint": "eslint src/**/*.ts",
     "lint:fix": "eslint src/**/*.ts --fix",
-    "clean": "rm -rf dist",
-    "prebuild": "npm run clean"
+    "clean": "rimraf dist",
+    "prebuild": "npm run clean",
+    "ci:local": "npm ci && npm run lint && npm run build && npm test && npm run test:coverage && npm audit --audit-level=moderate"
   },
   "keywords": [],
   "author": "",
@@ -26,9 +27,11 @@
     "@types/jest": "^30.0.0",
     "@types/node": "^24.7.2",
     "@types/supertest": "^6.0.2",
+    "audit-ci": "^7.1.0",
     "eslint": "^9.37.0",
     "jest": "^30.2.0",
     "nodemon": "^3.1.10",
+    "rimraf": "^6.0.1",
     "supertest": "^7.0.0",
     "ts-jest": "^29.2.5",
     "ts-node": "^10.9.2",

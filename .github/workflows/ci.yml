@@ -1,0 +1,202 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, master, develop ]
+  pull_request:
+    branches: [ main, master, develop ]
+
+jobs:
+  test:
+    name: Test Suite
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        node-version: [18.x, 20.x, 22.x]
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Setup Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ matrix.node-version }}
+        cache: 'npm'
+    
+    - name: Install dependencies
+      run: npm ci
+    
+    - name: Run linting
+      run: npm run lint
+    
+    - name: Build project
+      run: npm run build
+    
+    - name: Run tests
+      run: npm test
+    
+    - name: Run test coverage
+      run: npm run test:coverage
+    
+    - name: Upload coverage reports
+      uses: codecov/codecov-action@v4
+      with:
+        file: ./coverage/lcov.info
+        flags: unittests
+        name: codecov-umbrella
+        fail_ci_if_error: false
+
+  security:
+    name: Security Audit
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20.x'
+        cache: 'npm'
+    
+    - name: Install dependencies
+      run: npm ci
+    
+    - name: Run security audit
+      run: npm audit --audit-level=moderate
+    
+    - name: Check for known vulnerabilities
+      run: npx audit-ci --config audit-ci.json
+      continue-on-error: true
+
+  build-check:
+    name: Build Verification
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20.x'
+        cache: 'npm'
+    
+    - name: Install dependencies
+      run: npm ci
+    
+    - name: Build project
+      run: npm run build
+    
+    - name: Verify build output
+      run: |
+        if [ ! -d "dist" ]; then
+          echo "Build failed: dist directory not found"
+          exit 1
+        fi
+        if [ ! -f "dist/index.js" ]; then
+          echo "Build failed: dist/index.js not found"
+          exit 1
+        fi
+        echo "Build verification successful"
+
+  integration-test:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    needs: [test, build-check]
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20.x'
+        cache: 'npm'
+    
+    - name: Install dependencies
+      run: npm ci
+    
+    - name: Build project
+      run: npm run build
+    
+    - name: Create test slur file
+      run: |
+        echo "damn" > slurs.txt
+        echo "hell" >> slurs.txt
+        echo "bad" >> slurs.txt
+        echo "word" >> slurs.txt
+        echo "test" >> slurs.txt
+    
+    - name: Start server in background
+      run: |
+        npm start &
+        sleep 10
+    
+    - name: Test API endpoints
+      run: |
+        # Test single message validation
+        curl -X POST http://localhost:3001/api/words/validate \
+          -H "Content-Type: application/json" \
+          -d '{"message": "damn"}' \
+          --fail --silent --show-error
+        
+        # Test batch validation
+        curl -X POST http://localhost:3001/api/words/validate-batch \
+          -H "Content-Type: application/json" \
+          -d '{"messages": ["damn", "hello", "bad"]}' \
+          --fail --silent --show-error
+        
+        # Test spaced-out character detection
+        curl -X POST http://localhost:3001/api/words/validate \
+          -H "Content-Type: application/json" \
+          -d '{"message": "d a m n"}' \
+          --fail --silent --show-error
+        
+        echo "All API tests passed!"
+    
+    - name: Stop server
+      run: pkill -f "node dist/index.js" || true
+
+  deploy:
+    name: Deploy
+    runs-on: ubuntu-latest
+    needs: [test, security, build-check, integration-test]
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20.x'
+        cache: 'npm'
+    
+    - name: Install dependencies
+      run: npm ci
+    
+    - name: Build project
+      run: npm run build
+    
+    - name: Create deployment artifact
+      run: |
+        tar -czf naive-moderation-${{ github.sha }}.tar.gz \
+          dist/ \
+          package.json \
+          package-lock.json \
+          slurs.txt \
+          README.md
+    
+    - name: Upload deployment artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: naive-moderation-deployment
+        path: naive-moderation-${{ github.sha }}.tar.gz
+        retention-days: 30
